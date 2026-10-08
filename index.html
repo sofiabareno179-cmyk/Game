@@ -171,7 +171,8 @@
       ];
       let player, guards, projectiles, chaser, gemTaken, alert, state, camera, smokeUntil, speechUntil, lastTime;
       let role = "kaito", clues = [], deduction = 0, analysisUntil = 0, boostUntil = 0, hintUntil = 0, currentHint = "";
-      let quizSpots = [], activeQuiz = null, quizSpeedUntil = 0;
+      let quizSpots = [], activeQuiz = null, quizSpeedUntil = 0, quizCooldownUntil = 0, lastQuizX = null;
+      const QUIZ_COOLDOWN_MIN = 5000, QUIZ_COOLDOWN_RANGE = 3000, MIN_QUIZ_DISTANCE = 300;
       let quizFeedback = "", quizFeedbackUntil = 0;
       let witnesses = [], activeWitness = null, accusationOpen = false;
       let revealSequence = null;
@@ -186,6 +187,8 @@
         projectiles = [];
         activeQuiz = null;
         quizSpeedUntil = 0;
+        quizCooldownUntil = 0;
+        lastQuizX = null;
         quizFeedback = "";
         quizFeedbackUntil = 0;
         quizOverlay.hidden = true;
@@ -196,17 +199,10 @@
         stage.classList.remove("alarm-active");
         quizSpots = [
           { x: 220, object: "display case", correct: "in front of the display case", choices: ["behind the display case", "under the painting", "next to the pillar"] },
-          { x: 410, object: "landscape painting", correct: "in front of the painting", choices: ["behind the display case", "next to the pillar", "under the window"] },
-          { x: 450, object: "marble pillar", correct: "next to the pillar", choices: ["in front of the exit door", "behind the painting", "under the display case"] },
-          { x: 800, object: "display case", correct: "in front of the display case", choices: ["behind the display case", "under the painting", "next to the pillar"] },
-          { x: 950, object: "landscape painting", correct: "in front of the painting", choices: ["behind the display case", "next to the pillar", "under the window"] },
-          { x: 1145, object: "marble pillar", correct: "next to the pillar", choices: ["in front of the exit door", "behind the painting", "under the display case"] },
+          { x: 600, object: "landscape painting", correct: "in front of the painting", choices: ["behind the display case", "next to the pillar", "under the window"] },
+          { x: 980, object: "marble pillar", correct: "next to the pillar", choices: ["in front of the exit door", "behind the painting", "under the display case"] },
           { x: 1330, object: "Pandora display case", correct: "in front of the display case", choices: ["behind the display case", "under the painting", "next to the pillar"] },
-          { x: 1450, object: "marble pillar", correct: "next to the pillar", choices: ["in front of the exit door", "behind the painting", "under the display case"] },
-          { x: 1525, object: "landscape painting", correct: "in front of the painting", choices: ["behind the display case", "next to the pillar", "under the window"] },
-          { x: 1840, object: "marble pillar", correct: "next to the pillar", choices: ["in front of the exit door", "behind the painting", "under the display case"] },
-          { x: 1905, object: "display case", correct: "in front of the display case", choices: ["behind the display case", "under the painting", "next to the pillar"] },
-          { x: 2070, object: "landscape painting", correct: "in front of the painting", choices: ["behind the display case", "next to the pillar", "under the window"] },
+          { x: 1720, object: "landscape painting", correct: "in front of the painting", choices: ["behind the display case", "next to the pillar", "under the window"] },
           { x: 2155, object: "roof access door", correct: "in front of the exit door", choices: ["behind the display case", "under the painting", "next to the pillar"] }
         ].map(spot => ({ ...spot, asked: false }));
         chaser = { x: 1160, y: FLOOR - 42, w: 34, h: 42, active: false, speed: 85 };
@@ -401,10 +397,12 @@
       }
 
       function triggerNearbyQuiz() {
-        if (role !== "kaito" || activeQuiz) return false;
+        if (role !== "kaito" || activeQuiz || performance.now() < quizCooldownUntil) return false;
         const playerCenter = player.x + player.w / 2;
         const spot = quizSpots.find(candidate =>
-          !candidate.asked && Math.abs(playerCenter - candidate.x) <= 32
+          !candidate.asked &&
+          (lastQuizX === null || Math.abs(candidate.x - lastQuizX) >= MIN_QUIZ_DISTANCE) &&
+          Math.abs(playerCenter - candidate.x) <= 32
         );
         if (!spot) return false;
         openQuiz(spot);
@@ -436,6 +434,9 @@
       function answerQuiz(index) {
         if (!activeQuiz || state !== "playing") return;
         const wasCorrect = index === activeQuiz.correctIndex;
+        lastQuizX = activeQuiz.spot.x;
+        quizCooldownUntil = performance.now() + QUIZ_COOLDOWN_MIN +
+          Math.random() * QUIZ_COOLDOWN_RANGE;
         activeQuiz = null;
         quizOverlay.hidden = true;
         if (wasCorrect) {
